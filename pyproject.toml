@@ -1,0 +1,52 @@
+[project]
+name = "uk-property-mcp"
+version = "1.6.1"
+description = "UK property data MCP server — Land Registry, Rightmove, EPC, rental yields, stamp duty, Companies House."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "fastmcp",
+    "claude",
+    "uk",
+    "uk-property",
+    "land-registry",
+    "rightmove",
+    "epc",
+    "property-data",
+    "rental-yield",
+    "buy-to-let",
+    "property-investment",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "property-shared>=1.6.1",
+    "fastmcp>=3.2.4",
+    "anyio>=4.0.0",
+    "prometheus-client>=0.20.0",
+]
+
+[project.scripts]
+property-mcp = "property_mcp.server:main"
+
+[build-system]
+requires = ["hatchling>=1.26.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["property_mcp"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [".venv", "*.pyc", "__pycache__", ".pytest_cache", ".git"]
