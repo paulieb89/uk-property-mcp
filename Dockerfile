@@ -11,4 +11,4 @@ COPY property_mcp ./property_mcp
 RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
 
 EXPOSE 8080
-CMD ["property-mcp"]
+CMD [".venv/bin/property-mcp"]
