@@ -14,6 +14,7 @@ from statistics import median as stat_median
 from typing import Any, Optional
 
 import anyio
+import httpx
 from fastmcp import FastMCP
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.server.middleware.caching import (
@@ -21,7 +22,9 @@ from fastmcp.server.middleware.caching import (
     ReadResourceSettings,
     ResponseCachingMiddleware,
 )
+from fastmcp.utilities.types import Image
 from fastmcp.tools.tool import ToolResult
+from mcp.types import TextContent
 from prometheus_client import Counter as PromCounter, Histogram
 
 # ---------------------------------------------------------------------------
@@ -89,6 +92,21 @@ def _result(summary: str, data: dict) -> ToolResult:
         content=_content(summary, data),
         structured_content=_slim(data),
     )
+
+async def _fetch_images(urls: list[str], max_images: int, timeout_s: float = 5.0) -> list[Image]:
+    slice_ = urls[:max_images]
+    images = []
+    async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=True) as client:
+        for url in slice_:
+            try:
+                r = await client.get(url)
+                r.raise_for_status()
+                fmt = "jpeg" if "jpeg" in r.headers.get("content-type", "") else "png"
+                images.append(Image(data=r.content, format=fmt))
+            except Exception:
+                pass
+    return images
+
 
 mcp = FastMCP(
     "property-server",
@@ -577,14 +595,20 @@ async def rightmove_search(
 @mcp.tool()
 async def rightmove_listing(
     property_id: str,
+    include_images: bool = False,
+    max_images: int = 8,
 ) -> ToolResult:
     """Fetch full details for a Rightmove listing by ID or URL.
 
     Returns price, tenure, lease years remaining, service charge, ground rent,
     council tax band, floor area, key features, nearest stations, and floorplan URLs.
+    Set include_images=True to also fetch and return property photos (uses ~37k tokens
+    for 8 images at typical Rightmove resolution).
 
     Args:
         property_id: Rightmove property URL (e.g. "https://www.rightmove.co.uk/properties/12345678") or numeric ID (e.g. "12345678")
+        include_images: Fetch and return property photos as image content (default False)
+        max_images: Max photos to fetch when include_images=True (default 8)
     """
     from property_core.rightmove_scraper import fetch_listing
 
@@ -602,6 +626,16 @@ async def rightmove_listing(
         summary += f", {result.bedrooms} bed"
     if result.display_size:
         summary += f", {result.display_size}"
+
+    if include_images:
+        image_urls: list[str] = data.get("images") or []
+        images = await _fetch_images(image_urls, max_images=min(max_images, 12))
+        summary_with_count = summary + f" ({len(images)} photos)"
+        return ToolResult(
+            content=[TextContent(type="text", text=_content(summary_with_count, data)),
+                     *[img.to_image_content() for img in images]],
+            structured_content=_slim(data),
+        )
 
     return _result(summary, data)
 
