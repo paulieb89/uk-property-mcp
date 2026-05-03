@@ -33,7 +33,7 @@ Add to `.mcp.json`:
 
 ### Claude.ai (remote)
 
-`https://property-shared.fly.dev/mcp`
+`https://uk-property-mcp.fly.dev/mcp`
 
 ## Tools
 
@@ -61,8 +61,7 @@ Add to `.mcp.json`:
 | `EPC_API_KEY` | EPC tools | EPC Register API key |
 | `COMPANIES_HOUSE_API_KEY` | company_* tools | Companies House API key (free at developer.company-information.service.gov.uk) |
 | `RIGHTMOVE_DELAY_SECONDS` | No | Rate limit delay (default 0.6s) |
-| `MCP_TRANSPORT` | No | `stdio` (default), `sse`, or `http` |
-| `FASTMCP_STATELESS_HTTP` | Fly.io only | Set `true` for stateless HTTP transport |
+| `PORT` | No | HTTP port when self-hosting (default 8080) |
 
 Copy `.env.example` to `.env` and fill in credentials.
 
