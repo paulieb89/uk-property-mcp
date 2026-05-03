@@ -1,6 +1,6 @@
 [project]
 name = "uk-property-mcp"
-version = "1.0.0"
+version = "1.0.1"
 description = "UK property data MCP server — Land Registry, Rightmove, EPC, rental yields, stamp duty, Companies House."
 readme = "README.md"
 license = "MIT"

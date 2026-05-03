@@ -923,7 +923,7 @@ wheels = [
 
 [[package]]
 name = "property-shared"
-version = "1.6.1"
+version = "1.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -934,9 +934,9 @@ dependencies = [
     { name = "requests" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/18/41aecda1680774f3af455e7cc6d6713802361dde6b7cc00cb16bf8cb29c3/property_shared-1.6.1.tar.gz", hash = "sha256:fe3eb4a6b321351d6fe8d34f7702f47dac7b3af349174949020cdde81a745414", size = 843688, upload-time = "2026-05-02T10:12:05.918Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/f7/190d5b62e99ec494d1ea60a6806f580113b9989d977768ad7d4351b6b962/property_shared-1.7.3.tar.gz", hash = "sha256:26088a6f19d3af2354253d247a5bb069beaeefd7fa102e8f9c97c4f95412d08e", size = 678293, upload-time = "2026-05-03T05:35:44.358Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3a/b9/faabfc0b9f976f800b30fc43d6e3c1195a22cab0d98dd1e4fd854ebdfb39/property_shared-1.6.1-py3-none-any.whl", hash = "sha256:60141d63eb72960c22efb79a395378d05de19ce07adfdc9efa54115b9706e1bb", size = 317843, upload-time = "2026-05-02T10:12:04.141Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/5c/fa571aff11ae408392f4d878928dc979319fcb5ae7bce990e67542df934a/property_shared-1.7.3-py3-none-any.whl", hash = "sha256:341acc933e6e85a41d0a78265e5943c3a72abf76f70bdb609ef348bf8d6a0746", size = 136529, upload-time = "2026-05-03T05:35:42.2Z" },
 ]
 
 [[package]]
@@ -1584,7 +1584,7 @@ wheels = [
 
 [[package]]
 name = "uk-property-mcp"
-version = "1.6.1"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
