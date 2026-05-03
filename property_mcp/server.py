@@ -787,6 +787,25 @@ async def company_profile(company_number: str) -> ToolResult:
 
 
 # ---------------------------------------------------------------------------
+# Health + metrics routes (required by Fly.io health checks and Prometheus)
+# ---------------------------------------------------------------------------
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+@mcp.custom_route("/metrics", methods=["GET"])
+async def metrics(request: Request) -> Response:
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
