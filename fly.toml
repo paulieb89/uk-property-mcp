@@ -5,10 +5,7 @@ primary_region = "lhr"
   dockerfile = "Dockerfile"
 
 [env]
-  MCP_TRANSPORT = "http"
-  FASTMCP_HOST = "0.0.0.0"
-  FASTMCP_PORT = "8080"
-  FASTMCP_STATELESS_HTTP = "true"
+  PORT = "8080"
 
 [[vm]]
   memory = "512mb"

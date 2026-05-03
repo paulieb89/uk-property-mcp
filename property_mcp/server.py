@@ -805,22 +805,27 @@ async def metrics(request: Request) -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+@mcp.custom_route("/.well-known/mcp/server-card.json", methods=["GET"])
+async def server_card(request: Request) -> JSONResponse:
+    return JSONResponse({"serverInfo": {"name": "uk-property-mcp", "version": "1.6.1"}})
+
+
+@mcp.custom_route("/.well-known/glama.json", methods=["GET"])
+async def glama_manifest(request: Request) -> JSONResponse:
+    return JSONResponse({
+        "$schema": "https://glama.ai/mcp/schemas/connector.json",
+        "maintainers": [{"email": "paul@bouch.dev"}],
+    })
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
 def main():
-    transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    if transport not in ("stdio", "sse", "http"):
-        transport = "stdio"
-
-    kwargs = {}
-    if transport in ("sse", "http"):
-        kwargs["host"] = os.environ.get("FASTMCP_HOST", "0.0.0.0")
-        kwargs["port"] = int(os.environ.get("FASTMCP_PORT", "8080"))
-
-    mcp.run(transport=transport, **kwargs)
+    port = int(os.environ.get("PORT", "8080"))
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=port, stateless_http=True)
 
 
 # 5 min cache — 1h caused OOM on 1GB machine under burst load (unbounded in-memory cache)
