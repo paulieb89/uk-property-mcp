@@ -31,7 +31,7 @@ from prometheus_client import Counter as PromCounter, Histogram
 # Prometheus metrics
 # ---------------------------------------------------------------------------
 
-TRANSPORT = os.getenv("FASTMCP_TRANSPORT", "http")
+TRANSPORT = os.getenv("FASTMCP_TRANSPORT", "streamable-http")
 REGION = os.getenv("FLY_REGION", "local")
 
 tool_calls_total = PromCounter(
@@ -807,7 +807,8 @@ async def metrics(request: Request) -> Response:
 
 @mcp.custom_route("/.well-known/mcp/server-card.json", methods=["GET"])
 async def server_card(request: Request) -> JSONResponse:
-    return JSONResponse({"serverInfo": {"name": "uk-property-mcp", "version": "1.6.1"}})
+    from importlib.metadata import version as _pkg_version
+    return JSONResponse({"serverInfo": {"name": "uk-property-mcp", "version": _pkg_version("uk-property-mcp")}})
 
 
 @mcp.custom_route("/.well-known/glama.json", methods=["GET"])
