@@ -645,6 +645,9 @@ async def property_blocks(
     postcode: str,
     months: int = 24,
     min_transactions: int = 2,
+    limit: int = 50,
+    search_level: str = "sector",
+    property_type: Optional[str] = "F",
 ) -> ToolResult:
     """Find buildings with multiple flat sales — block buying opportunities.
 
@@ -655,6 +658,9 @@ async def property_blocks(
         postcode: UK postcode (e.g. "B1 1AA")
         months: Lookback period in months (default 24)
         min_transactions: Minimum sales per building to qualify (default 2)
+        limit: Maximum number of blocks to return (default 50)
+        search_level: Search granularity — "postcode", "sector", or "district" (default "sector")
+        property_type: PPD property type filter — "F" for flats, None for all types (default "F")
     """
     from property_core.block_service import analyze_blocks
 
@@ -663,7 +669,10 @@ async def property_blocks(
             analyze_blocks,
             postcode=postcode,
             months=months,
+            limit=limit,
             min_transactions=min_transactions,
+            search_level=search_level,
+            property_type=property_type,
         )
     )
     data = result.model_dump(mode="json")
