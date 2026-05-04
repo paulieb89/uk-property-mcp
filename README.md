@@ -5,6 +5,7 @@
 UK property data MCP server for AI agents. Wraps Land Registry, Rightmove, EPC, rental yields, stamp duty, and Companies House into 13 tools — one connection, no paywalls.
 
 [![PyPI](https://img.shields.io/pypi/v/uk-property-mcp)](https://pypi.org/project/uk-property-mcp/)
+[![Glama](https://img.shields.io/badge/Glama-listed-orange?style=flat-square)](https://glama.ai/mcp/connectors/io.github.paulieb89/property-shared)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=property-mcp&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fuk-property-mcp.fly.dev%2Fmcp%22%7D)
 [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=property-mcp&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fuk-property-mcp.fly.dev%2Fmcp%22%7D&quality=insiders)
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_Server-000000?style=flat-square&logoColor=white)](https://cursor.com/en/install-mcp?name=property-mcp&config=eyJ0eXBlIjoiaHR0cCIsInVybCI6Imh0dHBzOi8vdWstcHJvcGVydHktbWNwLmZseS5kZXYvbWNwIn0=)
