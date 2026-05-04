@@ -65,8 +65,4 @@ Add to `.mcp.json`:
 
 Copy `.env.example` to `.env` and fill in credentials.
 
-## Architecture
-
-`uk-property-mcp` depends on [`property-shared`](https://pypi.org/project/property-shared/) for all business logic (`property_core`). This package is a thin [FastMCP](https://github.com/jlowin/fastmcp) wrapper: 13 async tools, lazy imports, `anyio.to_thread.run_sync` for sync calls.
-
 For structured investment reports that chain these tools, see [bouch.dev/products](https://bouch.dev/products).
