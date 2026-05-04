@@ -9,10 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync
 
 # Run the server locally (stdio transport)
-uv run property-mcp
+uv run --env-file .env property-mcp
 
 # Run with HTTP transport
-MCP_TRANSPORT=http uv run property-mcp
+MCP_TRANSPORT=http uv run --env-file .env property-mcp
 
 # Build distribution
 uv build
