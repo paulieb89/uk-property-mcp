@@ -65,4 +65,4 @@ Add to `.mcp.json`:
 
 Copy `.env.example` to `.env` and fill in credentials.
 
-For structured investment reports that chain these tools, see [bouch.dev/products](https://bouch.dev/products).
+Agent skills for common workflows (property reports, deal sourcing, block-buy analysis) are in [`.agents/skills/`](.agents/skills/).
