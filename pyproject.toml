@@ -1,6 +1,6 @@
 [project]
 name = "uk-property-mcp"
-version = "1.0.1"
+version = "1.0.2"
 description = "UK property data MCP server — Land Registry, Rightmove, EPC, rental yields, stamp duty, Companies House."
 readme = "README.md"
 license = "MIT"
@@ -51,3 +51,8 @@ packages = ["property_mcp"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [".venv", "*.pyc", "__pycache__", ".pytest_cache", ".git"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.20.2",
+]
