@@ -6,7 +6,6 @@ Run:  property-mcp
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from functools import partial
@@ -22,16 +21,13 @@ from fastmcp.server.middleware.caching import (
     ReadResourceSettings,
     ResponseCachingMiddleware,
 )
-from fastmcp.utilities.types import Image
-from fastmcp.tools.tool import ToolResult
-from mcp.types import TextContent
 from prometheus_client import Counter as PromCounter, Histogram
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics
 # ---------------------------------------------------------------------------
 
-TRANSPORT = os.getenv("FASTMCP_TRANSPORT", "streamable-http")
+TRANSPORT = os.getenv("MCP_TRANSPORT", "http")
 REGION = os.getenv("FLY_REGION", "local")
 
 tool_calls_total = PromCounter(
@@ -76,38 +72,6 @@ def _slim(obj: Any) -> Any:
     return obj
 
 
-def _content(summary: str, data: dict) -> str:
-    """Build content string: summary + slimmed JSON data for LLM hosts."""
-    return summary + "\n\n" + json.dumps(_slim(data), indent=2, default=str)
-
-
-def _result(summary: str, data: dict) -> ToolResult:
-    """Build a ToolResult with slimmed data for both content and structured_content.
-
-    Strips raw, images, floorplans, epc_match from structured_content to avoid
-    flooding LLM context windows. API consumers who need raw data should use the
-    REST API directly.
-    """
-    return ToolResult(
-        content=_content(summary, data),
-        structured_content=_slim(data),
-    )
-
-async def _fetch_images(urls: list[str], max_images: int, timeout_s: float = 5.0) -> list[Image]:
-    slice_ = urls[:max_images]
-    images = []
-    async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=True) as client:
-        for url in slice_:
-            try:
-                r = await client.get(url)
-                r.raise_for_status()
-                fmt = "jpeg" if "jpeg" in r.headers.get("content-type", "") else "png"
-                images.append(Image(data=r.content, format=fmt))
-            except Exception:
-                pass
-    return images
-
-
 mcp = FastMCP(
     "property-server",
     middleware=[PrometheusMiddleware()],
@@ -131,7 +95,7 @@ mcp = FastMCP(
 
 
 # ---------------------------------------------------------------------------
-# Tools — each one calls property_core and returns ToolResult
+# Tools — each returns a plain dict so FastMCP generates proper outputSchemas
 # ---------------------------------------------------------------------------
 
 
@@ -143,7 +107,7 @@ async def property_report(
     ppd_months: int = 24,
     search_radius: float = 0.5,
     property_type: Optional[str] = None,
-) -> ToolResult:
+) -> dict:
     """Full data pull for a UK property in one call.
 
     Returns sale history, area comps, EPC rating, rental market listings,
@@ -172,7 +136,7 @@ async def property_report(
         search_radius=search_radius,
         property_type=property_type,
     )
-    data = report.model_dump(mode="json", exclude_none=True)
+    data = _slim(report.model_dump(mode="json", exclude_none=True))
 
     from property_core.interpret import generate_insights
 
@@ -184,7 +148,8 @@ async def property_report(
     if sources:
         summary += f"\nSources: {', '.join(sources)}"
 
-    return _result(summary, data)
+    data["_summary"] = summary
+    return data
 
 
 @mcp.tool()
@@ -197,7 +162,7 @@ async def property_comps(
     property_type: Optional[str] = None,
     enrich_epc: bool = True,
     auto_escalate: bool = True,
-) -> ToolResult:
+) -> dict:
     """Comparable property sales from Land Registry Price Paid Data.
 
     Auto-escalates to wider search area if fewer than 5 results found.
@@ -240,7 +205,7 @@ async def property_comps(
             )
             result = compute_enriched_stats(result)
 
-    data = result.model_dump(mode="json")
+    data = _slim(result.model_dump(mode="json"))
 
     summary = f"Found {result.count} comps for {postcode}"
     if result.median:
@@ -250,7 +215,8 @@ async def property_comps(
     if enrich_epc and result.epc_match_rate is not None:
         summary += f" (EPC matched {result.epc_match_rate}%)"
 
-    return _result(summary, data)
+    data["_summary"] = summary
+    return data
 
 
 @mcp.tool()
@@ -265,7 +231,7 @@ async def ppd_transactions(
     max_price: Optional[int] = None,
     property_type: Optional[str] = None,
     limit: int = 25,
-) -> ToolResult:
+) -> dict:
     """Search Land Registry transactions by postcode, address, date range, or price.
 
     Use for specific property history ("what has 10 Downing Street sold for?")
@@ -314,10 +280,8 @@ async def ppd_transactions(
             )
         )
 
-    # Serialize Pydantic models in results list
     result["results"] = [t.model_dump(mode="json") for t in result["results"]]
-    if result.get("raw"):
-        del result["raw"]
+    result.pop("raw", None)
 
     count = result["count"]
     location = postcode or street or "search"
@@ -325,7 +289,8 @@ async def ppd_transactions(
     if result.get("warnings"):
         summary += f" (warnings: {', '.join(result['warnings'])})"
 
-    return _result(summary, result)
+    result["_summary"] = summary
+    return _slim(result)
 
 
 @mcp.tool()
@@ -335,7 +300,7 @@ async def property_yield(
     search_level: str = "sector",
     property_type: Optional[str] = None,
     radius: float = 0.5,
-) -> ToolResult:
+) -> dict:
     """Calculate rental yield for a UK postcode.
 
     Combines Land Registry sales data with Rightmove rental listings
@@ -357,7 +322,7 @@ async def property_yield(
         property_type=property_type,
         radius=radius,
     )
-    data = result.model_dump(mode="json")
+    data = _slim(result.model_dump(mode="json"))
 
     from property_core.interpret import classify_data_quality, classify_yield
 
@@ -380,7 +345,8 @@ async def property_yield(
     else:
         summary += f", data quality: {data['data_quality']}"
 
-    return _result(summary, data)
+    data["_summary"] = summary
+    return data
 
 
 @mcp.tool()
@@ -390,7 +356,7 @@ async def rental_analysis(
     purchase_price: Optional[int] = None,
     auto_escalate: bool = True,
     building_type: Optional[str] = None,
-) -> ToolResult:
+) -> dict:
     """Rental market analysis for a UK postcode.
 
     Returns median/average rent, listing count, and rent range.
@@ -413,7 +379,7 @@ async def rental_analysis(
         auto_escalate=auto_escalate,
         building_type=building_type,
     )
-    data = result.model_dump(mode="json")
+    data = _slim(result.model_dump(mode="json"))
 
     if result.gross_yield_pct is not None:
         from property_core.interpret import classify_yield
@@ -427,14 +393,15 @@ async def rental_analysis(
     if result.escalated_from is not None:
         summary += f" (radius widened from {result.escalated_from}mi to {result.escalated_to}mi)"
 
-    return _result(summary, data)
+    data["_summary"] = summary
+    return data
 
 
 @mcp.tool()
 async def property_epc(
     postcode: str,
     address: Optional[str] = None,
-) -> ToolResult:
+) -> dict:
     """EPC certificate data for a UK property or postcode area.
 
     With address: returns the matched certificate for that property —
@@ -455,15 +422,15 @@ async def property_epc(
 
     epc = EPCClient()
     if not epc.is_configured():
-        return ToolResult(content="EPC service not configured (set EPC_API_EMAIL and EPC_API_KEY)")
+        return {"error": "EPC service not configured (set EPC_API_EMAIL and EPC_API_KEY)"}
 
     # Single-property mode — address provided
     if address:
         result = await epc.search_by_postcode(postcode, address=address)
         if not result:
-            return ToolResult(content=f"No EPC found for {address} {postcode}".strip())
+            return {"error": f"No EPC found for {address} {postcode}".strip()}
 
-        data = result.model_dump(mode="json", exclude_none=True)
+        data = _slim(result.model_dump(mode="json", exclude_none=True))
         parts = [f"EPC for {address}"]
         if result.rating:
             parts.append(f"Rating: {result.rating} (score {result.score})")
@@ -473,56 +440,34 @@ async def property_epc(
             parts.append(f"Type: {result.property_type}")
         if result.construction_age:
             parts.append(f"Built: {result.construction_age}")
-        return _result(", ".join(parts), data)
+        data["_summary"] = ", ".join(parts)
+        return data
 
     # Area mode — no address
     certs = await epc.search_all_by_postcode(postcode)
     if not certs:
-        return ToolResult(content=f"No EPC certificates found for {postcode}")
+        return {"error": f"No EPC certificates found for {postcode}"}
 
     ratings = Counter(c.rating for c in certs if c.rating)
     types = Counter(c.property_type for c in certs if c.property_type)
     areas = [c.floor_area for c in certs if c.floor_area]
 
-    summary = {
+    rating_str = ", ".join(f"{r}:{n}" for r, n in sorted(ratings.items())) if ratings else "no ratings"
+    summary = f"EPC area data for {postcode}: {len(certs)} certificates — {rating_str}"
+    if areas:
+        summary += f", floor area {int(min(areas))}-{int(max(areas))} sqm (avg {round(sum(areas) / len(areas))})"
+
+    return {
+        "_summary": summary,
+        "postcode": postcode,
         "count": len(certs),
         "rating_distribution": dict(sorted(ratings.items())),
         "property_type_breakdown": dict(sorted(types.items())),
         "floor_area_min": min(areas) if areas else None,
         "floor_area_max": max(areas) if areas else None,
         "floor_area_avg": round(sum(areas) / len(areas), 1) if areas else None,
+        "certificates": [_slim(c.model_dump(mode="json", exclude_none=True)) for c in certs],
     }
-
-    # Full data for structured_content (MCP Apps, dashboards, programmatic consumers)
-    structured_data = {
-        "postcode": postcode,
-        "summary": summary,
-        "certificates": [c.model_dump(mode="json", exclude_none=True) for c in certs],
-    }
-
-    # Lean data for LLM-visible content — skip the 25-cert list to save tokens.
-    # Claude.ai only reads content[], so cutting certs here saves ~20KB per call.
-    # If the caller needs individual cert detail, they should call property_epc
-    # again with a specific address.
-    llm_data = {
-        "postcode": postcode,
-        "summary": summary,
-        "certificates_count": len(certs),
-        "note": "Full certificate list available in structured_content. For individual property details, call property_epc with a specific address.",
-    }
-
-    rating_str = ", ".join(f"{r}:{n}" for r, n in sorted(ratings.items())) if ratings else "no ratings"
-    text_parts = [f"EPC area data for {postcode}: {len(certs)} certificates"]
-    text_parts.append(rating_str)
-    if areas:
-        text_parts.append(
-            f"floor area {int(min(areas))}-{int(max(areas))} sqm (avg {round(sum(areas) / len(areas))})"
-        )
-
-    return ToolResult(
-        content=_content(" — ".join(text_parts), llm_data),
-        structured_content=_slim(structured_data),
-    )
 
 
 @mcp.tool()
@@ -537,7 +482,7 @@ async def rightmove_search(
     radius: Optional[float] = None,
     max_pages: int = 1,
     sort_by: Optional[str] = None,
-) -> ToolResult:
+) -> dict:
     """Search Rightmove property listings for sale or rent near a postcode.
 
     Returns prices, addresses, bedrooms, agent details, and listing URLs.
@@ -577,19 +522,19 @@ async def rightmove_search(
         partial(fetch_listings, url, max_pages=max_pages)
     )
 
-    data = {
-        "search_url": url,
-        "count": len(listings),
-        "listings": [listing.model_dump(mode="json") for listing in listings],
-    }
-
+    listing_dicts = [_slim(listing.model_dump(mode="json")) for listing in listings]
     prices = [listing.price for listing in listings if listing.price and listing.price > 0]
     summary = f"Found {len(listings)} {property_type} listings near {postcode}"
     if prices:
         median = int(stat_median(prices))
         summary += f", median £{median:,}, range £{min(prices):,}-£{max(prices):,}"
 
-    return _result(summary, data)
+    return {
+        "_summary": summary,
+        "search_url": url,
+        "count": len(listings),
+        "listings": listing_dicts,
+    }
 
 
 @mcp.tool()
@@ -597,25 +542,25 @@ async def rightmove_listing(
     property_id: str,
     include_images: bool = False,
     max_images: int = 8,
-) -> ToolResult:
+) -> dict:
     """Fetch full details for a Rightmove listing by ID or URL.
 
     Returns price, tenure, lease years remaining, service charge, ground rent,
     council tax band, floor area, key features, nearest stations, and floorplan URLs.
-    Set include_images=True to also fetch and return property photos (uses ~37k tokens
-    for 8 images at typical Rightmove resolution).
+    Set include_images=True to also fetch and return image URLs (use rightmove_listing
+    without include_images for basic detail, check image_urls field for photos).
 
     Args:
         property_id: Rightmove property URL (e.g. "https://www.rightmove.co.uk/properties/12345678") or numeric ID (e.g. "12345678")
-        include_images: Fetch and return property photos as image content (default False)
-        max_images: Max photos to fetch when include_images=True (default 8)
+        include_images: Include image URLs in the response (default False)
+        max_images: Max image URLs to include when include_images=True (default 8)
     """
     from property_core.rightmove_scraper import fetch_listing
 
     result = await anyio.to_thread.run_sync(
         partial(fetch_listing, property_id)
     )
-    data = result.model_dump(mode="json")
+    data = _slim(result.model_dump(mode="json"))
 
     summary = f"{result.address or 'Property'}"
     if result.price:
@@ -628,16 +573,12 @@ async def rightmove_listing(
         summary += f", {result.display_size}"
 
     if include_images:
-        image_urls: list[str] = data.get("images") or []
-        images = await _fetch_images(image_urls, max_images=min(max_images, 12))
-        summary_with_count = summary + f" ({len(images)} photos)"
-        return ToolResult(
-            content=[TextContent(type="text", text=_content(summary_with_count, data)),
-                     *[img.to_image_content() for img in images]],
-            structured_content=_slim(data),
-        )
+        image_urls: list[str] = result.model_dump(mode="json").get("images") or []
+        data["image_urls"] = image_urls[:min(max_images, 12)]
+        summary += f" ({len(data['image_urls'])} image URLs)"
 
-    return _result(summary, data)
+    data["_summary"] = summary
+    return data
 
 
 @mcp.tool()
@@ -648,7 +589,7 @@ async def property_blocks(
     limit: int = 50,
     search_level: str = "sector",
     property_type: Optional[str] = "F",
-) -> ToolResult:
+) -> dict:
     """Find buildings with multiple flat sales — block buying opportunities.
 
     Groups Land Registry transactions by building to identify blocks being
@@ -675,14 +616,15 @@ async def property_blocks(
             property_type=property_type,
         )
     )
-    data = result.model_dump(mode="json")
+    data = _slim(result.model_dump(mode="json"))
 
     summary = f"Found {result.blocks_found} flat blocks for {postcode}"
     if result.blocks:
         top = result.blocks[0]
         summary += f" (top: {top.building_name}, {top.transaction_count} sales)"
 
-    return _result(summary, data)
+    data["_summary"] = summary
+    return data
 
 
 @mcp.tool()
@@ -691,7 +633,7 @@ async def stamp_duty(
     additional_property: bool = True,
     first_time_buyer: bool = False,
     non_resident: bool = False,
-) -> ToolResult:
+) -> dict:
     """Calculate UK Stamp Duty Land Tax (SDLT) for a residential property.
 
     Args:
@@ -708,17 +650,15 @@ async def stamp_duty(
         first_time_buyer=first_time_buyer,
         non_resident=non_resident,
     )
-    data = result.model_dump(mode="json")
-
-    summary = f"SDLT for £{price:,}: £{result.total_sdlt:,.0f} ({result.effective_rate}% effective rate)"
-
-    return _result(summary, data)
+    data = _slim(result.model_dump(mode="json"))
+    data["_summary"] = f"SDLT for £{price:,}: £{result.total_sdlt:,.0f} ({result.effective_rate}% effective rate)"
+    return data
 
 
 @mcp.tool()
 async def planning_search(
     postcode: str,
-) -> ToolResult:
+) -> dict:
     """Find the planning portal URL for a UK postcode.
 
     Returns the council name, planning system type, and a direct URL to open in a browser.
@@ -745,13 +685,14 @@ async def planning_search(
     else:
         summary = f"No planning portal found for {postcode}"
 
-    return _result(summary, result)
+    result["_summary"] = summary
+    return _slim(result)
 
 
 @mcp.tool()
 async def company_search(
     query: str,
-) -> ToolResult:
+) -> dict:
     """Search Companies House by company name. Returns a list of matches.
 
     For a direct lookup by company number, use company_profile(company_number="00445790").
@@ -763,17 +704,16 @@ async def company_search(
 
     client = CompaniesHouseClient()
     if not client.is_configured():
-        return ToolResult(content="Companies House not configured (set COMPANIES_HOUSE_API_KEY)")
+        return {"error": "Companies House not configured (set COMPANIES_HOUSE_API_KEY)"}
 
     result = await anyio.to_thread.run_sync(partial(client.search, query))
-    data = result.model_dump(mode="json")
-    summary = f"Found {result.total_results} companies for '{query}'"
-
-    return _result(summary, data)
+    data = _slim(result.model_dump(mode="json"))
+    data["_summary"] = f"Found {result.total_results} companies for '{query}'"
+    return data
 
 
 @mcp.tool()
-async def company_profile(company_number: str) -> ToolResult:
+async def company_profile(company_number: str) -> dict:
     """Get the full Companies House record for a company by number.
 
     Returns registered address, status, incorporation date, officers, and
@@ -786,13 +726,13 @@ async def company_profile(company_number: str) -> ToolResult:
 
     client = CompaniesHouseClient()
     if not client.is_configured():
-        return ToolResult(content="Companies House not configured (set COMPANIES_HOUSE_API_KEY)")
+        return {"error": "Companies House not configured (set COMPANIES_HOUSE_API_KEY)"}
     result = await anyio.to_thread.run_sync(partial(client.get_company, company_number))
     if result is None:
-        return ToolResult(content=f"Company {company_number!r} not found")
+        return {"error": f"Company {company_number!r} not found"}
     data = _slim(result.model_dump(mode="json"))
-    summary = result.company_name or company_number
-    return _result(summary, data)
+    data["_summary"] = result.company_name or company_number
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -829,16 +769,55 @@ async def glama_manifest(request: Request) -> JSONResponse:
 
 
 # ---------------------------------------------------------------------------
+# Accept header normalizer — ensures application/json is always present.
+# Anthropic's infrastructure sends Accept: text/event-stream or */* for some
+# MCP requests, which 406s against json_response=True. This middleware rewrites
+# those before FastMCP sees them.
+# ---------------------------------------------------------------------------
+
+class _AcceptNormalizer:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            headers = []
+            for name, value in scope.get("headers", []):
+                if name.lower() == b"accept" and b"application/json" not in value:
+                    value = (b"application/json, " + value) if value else b"application/json"
+                headers.append((name, value))
+            scope = {**scope, "headers": headers}
+        await self.app(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
 def main():
+    import uvicorn
+
     port = int(os.environ.get("PORT", "8080"))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port, stateless_http=True)
+    from fastmcp.server.http import create_streamable_http_app
+    app = create_streamable_http_app(
+        mcp,
+        streamable_http_path="/mcp",
+        json_response=True,
+        stateless_http=True,
+    )
+    uvicorn.run(
+        _AcceptNormalizer(app),
+        host="0.0.0.0",
+        port=port,
+        forwarded_allow_ips="*",
+        proxy_headers=True,
+        lifespan="on",
+        log_level="info",
+    )
 
 
-# 5 min cache — 1h caused OOM on 1GB machine under burst load (unbounded in-memory cache)
+# 5 min cache — 1h caused OOM on 512MB machine under burst load (unbounded in-memory cache)
 mcp.add_middleware(ResponseCachingMiddleware(
     read_resource_settings=ReadResourceSettings(ttl=300),
     call_tool_settings=CallToolSettings(ttl=300),
