@@ -1749,7 +1749,7 @@ wheels = [
 
 [[package]]
 name = "uk-property-mcp"
-version = "1.0.2"
+version = "1.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
