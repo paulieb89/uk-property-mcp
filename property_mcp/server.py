@@ -160,14 +160,17 @@ async def property_comps(
     search_level: str = "sector",
     address: Optional[str] = None,
     property_type: Optional[str] = None,
+    transaction_category: Optional[str] = "A",
+    filter_outliers: bool = False,
     enrich_epc: bool = True,
     auto_escalate: bool = True,
 ) -> dict:
     """Comparable property sales from Land Registry Price Paid Data.
 
-    Auto-escalates to wider search area if fewer than 5 results found.
-    EPC enrichment adds floor area, price/sqft, and EPC rating to each
-    comp, plus area-level median price/sqft and EPC match rate.
+    Returns clean residential standard sales by default. Bulk transfers
+    (transaction_category "B") and commercial units are excluded unless
+    you opt back in. Auto-escalates to wider search area if fewer than 5
+    results found.
 
     Args:
         postcode: UK postcode (e.g. "SW1A 1AA", "NG11 9HD")
@@ -175,7 +178,13 @@ async def property_comps(
         limit: Max transactions to return (default 30)
         search_level: Search area granularity - usually leave as default
         address: Optional street address to identify subject property and show percentile rank
-        property_type: Filter by type: F=flat, D=detached, S=semi, T=terraced (default all)
+        property_type: Residential filter. None (default) = residential set (F+D+S+T).
+            "F"=flat, "D"=detached, "S"=semi, "T"=terraced, "O"=commercial-only.
+            Pass "ALL" for the raw firehose including commercial.
+        transaction_category: "A" (default) = standard residential sales only.
+            Pass None to include category-B (bulk transfers, intra-group conveyances).
+        filter_outliers: When True, applies a 1.5×IQR price filter (needs ≥4 prices).
+            Default False — median is naturally robust; opt in for a cleaner mean.
         enrich_epc: Add floor area, price/sqft, and EPC rating to each comp (default true)
         auto_escalate: Widen search area if fewer than 5 results (default true). Set false to keep results local — useful when district-level escalation would include irrelevant areas.
     """
@@ -193,6 +202,8 @@ async def property_comps(
             search_level=search_level,
             address=address,
             property_type=property_type,
+            transaction_category=transaction_category,
+            filter_outliers=filter_outliers,
             auto_escalate=auto_escalate,
         )
     )
