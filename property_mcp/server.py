@@ -63,10 +63,18 @@ class PrometheusMiddleware(Middleware):
 
 
 def _slim(obj: Any) -> Any:
-    """Strip raw/images/floorplans/epc_match for LLM-friendly content."""
+    """Strip raw/images/floorplans/epc_match keys + drop None values recursively.
+
+    The bulk-key stripping is the original behaviour. The None-dropping kills
+    placeholder fields like the 10 EPC enrichment keys on PPDTransaction that
+    are always null without explicit enrichment — ~190 wasted tokens per
+    transaction in pre-fix responses.
+    """
     if isinstance(obj, dict):
-        return {k: _slim(v) for k, v in obj.items()
-                if k not in ("raw", "images", "floorplans", "epc_match")}
+        return {
+            k: _slim(v) for k, v in obj.items()
+            if v is not None and k not in ("raw", "images", "floorplans", "epc_match")
+        }
     if isinstance(obj, list):
         return [_slim(item) for item in obj]
     return obj
