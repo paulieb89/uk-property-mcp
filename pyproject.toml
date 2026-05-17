@@ -1,6 +1,6 @@
 [project]
 name = "uk-property-mcp"
-version = "1.0.7"
+version = "1.0.8"
 description = "UK property data MCP server — Land Registry, Rightmove, EPC, rental yields, stamp duty, Companies House."
 readme = "README.md"
 license = "MIT"
@@ -32,7 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "property-shared>=1.11.0",
+    "property-shared>=1.12.0",
     "fastmcp>=3.2.4",
     "anyio>=4.0.0",
     "httpx>=0.27.0",
