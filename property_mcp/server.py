@@ -6,6 +6,7 @@ Run:  property-mcp
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from functools import partial
@@ -41,6 +42,43 @@ tool_duration_seconds = Histogram(
     labelnames=["tool", "transport", "region"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
+client_connections_total = PromCounter(
+    "property_mcp_client_connections_total",
+    "Count of MCP client initialize handshakes.",
+    labelnames=["client_name", "client_version", "transport", "region"],
+)
+
+_log = logging.getLogger("fastmcp.property_mcp.clients")
+
+
+class ClientTrackingMiddleware(Middleware):
+    """Log clientInfo and increment connection counter on every initialize.
+
+    This server is open and unauthenticated, so the initialize handshake's clientInfo
+    is the ONLY identity a caller offers. Without it, tool_calls_total says what was
+    called but never by whom — and a fleet sweep on 2026-07-17 found real third-party
+    consumers (agent-tools.cloud, codex-mcp-client, ai-sdk-mcp-client) that were
+    invisible on every server lacking this.
+
+    Counts handshakes, not tool calls: a client label on tool_calls_total would
+    multiply cardinality by every distinct client seen. Note main() runs
+    stateless_http=True, so every request is its own session and sends its own
+    initialize — these are connection counts, not user counts.
+
+    Ported from uk-legal-mcp/src/gateway.py, which has had it all along.
+    """
+
+    async def on_request(self, context: MiddlewareContext, call_next):
+        result = await call_next(context)
+        if context.method == "initialize":
+            params = context.message.params
+            info = getattr(params, "clientInfo", None)
+            client_name = getattr(info, "name", "unknown") or "unknown"
+            client_version = getattr(info, "version", "unknown") or "unknown"
+            _log.info("client_connected client=%s version=%s transport=%s region=%s",
+                      client_name, client_version, TRANSPORT, REGION)
+            client_connections_total.labels(client_name, client_version, TRANSPORT, REGION).inc()
+        return result
 
 
 class PrometheusMiddleware(Middleware):
@@ -82,7 +120,7 @@ def _slim(obj: Any) -> Any:
 
 mcp = FastMCP(
     "property-server",
-    middleware=[PrometheusMiddleware()],
+    middleware=[ClientTrackingMiddleware(), PrometheusMiddleware()],
     instructions=(
         "UK property data tools. Use property_report for a full data pull when "
         "you have a street address + postcode (comps + EPC + yield + market in "
